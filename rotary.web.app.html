@@ -1,0 +1,154 @@
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-router-dom";
+import axios from "axios";
+
+const config = {
+  API_URL: "http://localhost:5000/api"
+};
+
+const getUserRole = () => {
+  return localStorage.getItem("userRole") || "comum";
+};
+
+const isMembroRotary = () => getUserRole() === "membro";
+
+function Home() {
+  return (
+    <div className="p-8 text-center bg-blue-50">
+      <h1 className="text-4xl font-bold text-blue-900 mb-4">Rotary Club - Campo Grande/MS</h1>
+      <p className="text-lg mb-6 text-gray-700">Transformando solidariedade em impacto real com tecnologia.</p>
+      <Link to="/campanhas" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition">Ver Campanhas</Link>
+    </div>
+  );
+}
+
+function Campanhas() {
+  const [campanhas, setCampanhas] = useState([]);
+
+  useEffect(() => {
+    axios.get(`${config.API_URL}/campanhas`).then(res => setCampanhas(res.data));
+  }, []);
+
+  return (
+    <div className="p-8 bg-white max-w-5xl mx-auto">
+      <h2 className="text-3xl font-bold text-blue-900 mb-6">Campanhas Ativas</h2>
+      <ul className="space-y-6">
+        {campanhas.map((campanha, index) => (
+          <li key={index} className="border p-6 rounded-lg shadow-md bg-blue-50">
+            <h3 className="text-2xl font-bold text-blue-800">{campanha.titulo}</h3>
+            <p className="text-gray-700">{campanha.descricao} Meta: {campanha.meta} unidades. Progresso: {campanha.progresso} arrecadados.</p>
+            <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+              <div className="bg-blue-600 h-4 rounded-full" style={{ width: `${(campanha.progresso / campanha.meta) * 100}%` }}></div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="bg-blue-600 hover:bg-blue-800 text-white py-2 px-4 rounded-full">Doar com Pix</button>
+              <button className="bg-blue-500 hover:bg-blue-700 text-white py-2 px-4 rounded-full">Doar com Cartão</button>
+              <button className="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded-full">Compartilhar</button>
+              <button className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-full">Ver Detalhes</button>
+              <button className="bg-purple-600 hover:bg-purple-800 text-white py-2 px-4 rounded-full">Acompanhar</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NovaCampanha() {
+  if (!isMembroRotary()) return <Navigate to="/" />;
+
+  const [form, setForm] = useState({ titulo: "", descricao: "", meta: 0, prazo: "" });
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.titulo || !form.descricao || !form.meta || !form.prazo) {
+      alert("Por favor, preencha todos os campos.");
+      return;
+    }
+    await axios.post(`${config.API_URL}/campanhas`, form);
+    alert("Campanha cadastrada com sucesso!");
+  };
+
+  return (
+    <div className="p-8 bg-white max-w-3xl mx-auto">
+      <h2 className="text-3xl font-bold text-blue-900 mb-6">Cadastrar Nova Campanha</h2>
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        <div>
+          <label className="block font-semibold text-gray-700">Título</label>
+          <input className="w-full border p-3 rounded-lg" type="text" name="titulo" onChange={handleChange} required />
+        </div>
+        <div>
+          <label className="block font-semibold text-gray-700">Descrição</label>
+          <textarea className="w-full border p-3 rounded-lg" name="descricao" onChange={handleChange} required></textarea>
+        </div>
+        <div>
+          <label className="block font-semibold text-gray-700">Meta</label>
+          <input className="w-full border p-3 rounded-lg" type="number" name="meta" onChange={handleChange} required />
+        </div>
+        <div>
+          <label className="block font-semibold text-gray-700">Prazo</label>
+          <input className="w-full border p-3 rounded-lg" type="date" name="prazo" onChange={handleChange} required />
+        </div>
+        <button type="submit" className="bg-blue-700 hover:bg-blue-900 text-white font-bold py-3 px-6 rounded-full">Criar Campanha</button>
+      </form>
+    </div>
+  );
+}
+
+function Doacoes() {
+  return (
+    <div className="p-8 max-w-3xl mx-auto bg-white">
+      <h2 className="text-3xl font-bold text-blue-900 mb-6">Minhas Doações</h2>
+      <ul className="space-y-6">
+        <li className="border p-6 rounded-lg shadow bg-blue-50">
+          <p><strong>Campanha:</strong> Campanha do Agasalho</p>
+          <p><strong>Valor/Itens:</strong> 10 peças de roupa</p>
+          <p><strong>Data:</strong> 20/10/2024</p>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+function Notificacoes() {
+  return (
+    <div className="p-8 bg-white max-w-3xl mx-auto">
+      <h2 className="text-3xl font-bold text-blue-900 mb-6">Notificações Recentes</h2>
+      <ul className="space-y-4">
+        <li className="bg-blue-100 p-4 rounded-lg">Nova campanha cadastrada: "Natal Solidário"</li>
+        <li className="bg-blue-100 p-4 rounded-lg">Meta atingida na campanha: "Campanha do Agasalho"</li>
+      </ul>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <div className="bg-blue-50 min-h-screen font-sans">
+        <nav className="bg-blue-800 p-4 text-white shadow-lg">
+          <ul className="flex flex-wrap justify-center gap-6 text-lg">
+            <li><Link to="/">Início</Link></li>
+            <li><Link to="/campanhas">Campanhas</Link></li>
+            {isMembroRotary() && <li><Link to="/nova">Nova Campanha</Link></li>}
+            <li><Link to="/doacoes">Minhas Doações</Link></li>
+            <li><Link to="/notificacoes">Notificações</Link></li>
+          </ul>
+        </nav>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/campanhas" element={<Campanhas />} />
+          <Route path="/nova" element={<NovaCampanha />} />
+          <Route path="/doacoes" element={<Doacoes />} />
+          <Route path="/notificacoes" element={<Notificacoes />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
