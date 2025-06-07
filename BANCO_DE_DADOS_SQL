@@ -1,0 +1,195 @@
+CREATE TABLE ORGANIZACOES (
+    id_organizacao SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    info_contato TEXT
+);
+
+INSERT INTO ORGANIZACOES (nome, info_contato) VALUES
+('Rotary Club Central', 'contato@rotarycentral.org'),
+('Rotary Club Leste', 'contato@rotaryleste.org');
+
+
+CREATE TABLE CAMPANHAS (
+    id_campanhas SERIAL PRIMARY KEY,
+    id_organizacao INTEGER NOT NULL,
+    nome VARCHAR(100) NOT NULL,
+    descricao TEXT,
+    data_inicio DATE,
+    data_final DATE,
+    valor_meta DECIMAL(10, 2),
+    valor_coletado DECIMAL(10, 2) DEFAULT 0,
+    FOREIGN KEY (id_organizacao) REFERENCES ORGANIZACOES(id_organizacao)
+);
+
+INSERT INTO CAMPANHAS (id_organizacao, nome, descricao, data_inicio, data_final, valor_meta) VALUES
+(1, 'Campanha de Inverno', 'Arrecadação de agasalhos', '2025-06-01', '2025-07-15', 5000.00),
+(2, 'Campanha Alimentar', 'Doação de cestas básicas', '2025-06-10', '2025-07-30', 8000.00);
+
+
+CREATE TABLE USUARIOS (
+    id_usuario SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    papel VARCHAR(50) CHECK (papel IN ('membro', 'visitante'))
+);
+
+INSERT INTO USUARIOS (nome, email, papel) VALUES
+('Carlos Silva', 'carlos@exemplo.com', 'membro'),
+('Ana Souza', 'ana@exemplo.com', 'visitante');
+
+
+CREATE TABLE NOTIFICACOES (
+    id_notificacao SERIAL PRIMARY KEY,
+    id_usuario INTEGER NOT NULL,
+    data_notificacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES USUARIOS(id_usuario)
+);
+
+INSERT INTO NOTIFICACOES (id_usuario) VALUES (1), (2);
+
+
+CREATE TABLE DOACOES (
+    id_doacoes SERIAL PRIMARY KEY,
+    id_campanhas INTEGER NOT NULL,
+    id_usuario INTEGER NOT NULL,
+    valor_doacao DECIMAL(10, 2),
+    data_doacao DATE DEFAULT CURRENT_DATE,
+    FOREIGN KEY (id_campanhas) REFERENCES CAMPANHAS(id_campanhas),
+    FOREIGN KEY (id_usuario) REFERENCES USUARIOS(id_usuario)
+);
+
+INSERT INTO DOACOES (id_campanhas, id_usuario, valor_doacao) VALUES
+(1, 2, 100.00),
+(2, 1, 200.00);
+
+
+CREATE TABLE VOLUNTARIO (
+    id_voluntario SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    email VARCHAR(100),
+    telefone VARCHAR(20),
+    disponibilidade TEXT,
+    habilidades TEXT
+);
+
+INSERT INTO VOLUNTARIO (nome, email, telefone, disponibilidade, habilidades) VALUES
+('João Lima', 'joao@exemplo.com', '11999999999', 'Finais de semana', 'Organização de eventos');
+
+
+CREATE TABLE VOLUNTARIO_CAMPANHA (
+    id_voluntario INTEGER NOT NULL,
+    id_campanhas INTEGER NOT NULL,
+    PRIMARY KEY (id_voluntario, id_campanhas),
+    FOREIGN KEY (id_voluntario) REFERENCES VOLUNTARIO(id_voluntario),
+    FOREIGN KEY (id_campanhas) REFERENCES CAMPANHAS(id_campanhas)
+);
+
+INSERT INTO VOLUNTARIO_CAMPANHA (id_voluntario, id_campanhas) VALUES (1, 1);
+
+
+CREATE TABLE EVENTO (
+    id_evento SERIAL PRIMARY KEY,
+    id_campanhas INTEGER NOT NULL,
+    nome VARCHAR(100),
+    data DATE,
+    local VARCHAR(100),
+    descricao TEXT,
+    meta_arrecadacao DECIMAL(10, 2),
+    tipo VARCHAR(50),
+    FOREIGN KEY (id_campanhas) REFERENCES CAMPANHAS(id_campanhas)
+);
+
+INSERT INTO EVENTO (id_campanhas, nome, data, local, descricao, meta_arrecadacao, tipo) VALUES
+(1, 'Feira Solidária', '2025-06-20', 'Praça Central', 'Evento de arrecadação de alimentos', 3000.00, 'alimentar');
+
+
+CREATE TABLE PRODUTO_ARRECADADO (
+    id_produto SERIAL PRIMARY KEY,
+    id_campanhas INTEGER NOT NULL,
+    nome VARCHAR(100),
+    tipo VARCHAR(50),
+    quantidade_arrecadada INTEGER,
+    quantidade_necessaria INTEGER,
+    data_doacao DATE,
+    data_arrecadacao DATE,
+    FOREIGN KEY (id_campanhas) REFERENCES CAMPANHAS(id_campanhas)
+);
+
+INSERT INTO PRODUTO_ARRECADADO (id_campanhas, nome, tipo, quantidade_arrecadada, quantidade_necessaria, data_doacao, data_arrecadacao) VALUES
+(1, 'Cobertores', 'vestuário', 50, 200, '2025-06-05', '2025-06-10');
+
+
+CREATE OR REPLACE FUNCTION atualizar_valor_coletado()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE CAMPANHAS
+  SET valor_coletado = valor_coletado + NEW.valor_doacao
+  WHERE id_campanhas = NEW.id_campanhas;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_atualiza_valor_coletado
+AFTER INSERT ON DOACOES
+FOR EACH ROW
+EXECUTE FUNCTION atualizar_valor_coletado();
+
+
+CREATE OR REPLACE FUNCTION notificar_usuario_apos_doacao()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO NOTIFICACOES (id_usuario)
+  VALUES (NEW.id_usuario);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_notificar_doacao
+AFTER INSERT ON DOACOES
+FOR EACH ROW
+EXECUTE FUNCTION notificar_usuario_apos_doacao();
+
+
+CREATE OR REPLACE VIEW vw_progresso_campanhas AS
+SELECT 
+  c.nome AS campanha,
+  c.valor_meta,
+  c.valor_coletado,
+  ROUND((c.valor_coletado / c.valor_meta) * 100, 2) AS percentual_alcancado
+FROM CAMPANHAS c;
+
+
+CREATE OR REPLACE VIEW vw_resumo_doacoes_usuario AS
+SELECT 
+  u.nome AS usuario,
+  COUNT(d.id_doacoes) AS total_doacoes,
+  SUM(d.valor_doacao) AS valor_total
+FROM USUARIOS u
+JOIN DOACOES d ON u.id_usuario = d.id_usuario
+GROUP BY u.nome;
+
+
+CREATE OR REPLACE PROCEDURE registrar_doacao(
+  p_id_usuario INTEGER,
+  p_id_campanha INTEGER,
+  p_valor DECIMAL
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO DOACOES (id_campanhas, id_usuario, valor_doacao)
+  VALUES (p_id_campanha, p_id_usuario, p_valor);
+END;
+$$;
+
+
+UPDATE CAMPANHAS SET valor_coletado = valor_coletado + 100 WHERE id_campanhas = 1;
+
+
+SELECT c.nome AS campanha, u.nome AS doador, d.valor_doacao
+FROM DOACOES d
+JOIN CAMPANHAS c ON d.id_campanhas = c.id_campanhas
+JOIN USUARIOS u ON d.id_usuario = u.id_usuario;
+
+
+DELETE FROM DOACOES WHERE id_doacoes = 1;
